@@ -49,5 +49,5 @@ module "eks" {
 resource "aws_iam_role_policy_attachment" "eks_ebs_csi_policy" {
   for_each   = module.eks.eks_managed_node_groups
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
-  role  = each.value.iam_role_name
+  role       = each.value.iam_role_name
 }
