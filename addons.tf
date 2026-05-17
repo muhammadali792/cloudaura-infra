@@ -13,18 +13,20 @@ resource "helm_release" "cert_manager" {
   }
 }
 
-# 2. ArgoCD Deployment (Fixed URL)
+# 2. ArgoCD Deployment
 resource "helm_release" "argocd" {
   name             = "argocd"
-  repository       = "https://argoproj.github.io/argo-helm" # <--- Fixed URL yahan hai
+  repository       = "https://argoproj.github.io/argo-helm"
   chart            = "argo-cd"
   version          = "5.52.0"
   namespace        = "argocd"
   create_namespace = true
-  wait             = false
+
+  # 🚀 Pipeline timeout se bachne ke liye wait false kiya hai
+  wait = false
 }
 
-# 3. Nginx Ingress Controller (Fixed Timeout)
+# 3. Nginx Ingress Controller
 resource "helm_release" "nginx_ingress" {
   name             = "ingress-nginx"
   repository       = "https://kubernetes.github.io/ingress-nginx"
@@ -33,12 +35,15 @@ resource "helm_release" "nginx_ingress" {
   namespace        = "ingress-nginx"
   create_namespace = true
 
-  # 🚀 AWS Load Balancer ke ghanton intezar se bachne ke liye:
-  wait = false
+  # 🚀 Ziddi timeout aur webhooks ko bypass karne ke liye important settings:
+  wait             = false
+  wait_for_jobs    = false
+  disable_webhooks = true
 }
 
 # ==============================================================================
 # ⚠️ KUBERNETES MANIFESTS (Temporary Commented Out for Bootstrapping)
+# Cluster poora banne ke baad, hum inko uncomment karke dobara push karenge.
 # ==============================================================================
 /*
 resource "kubernetes_manifest" "selfsigned_issuer" {
