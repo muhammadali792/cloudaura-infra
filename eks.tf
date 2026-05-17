@@ -13,10 +13,10 @@ module "eks" {
   eks_managed_node_groups = {
     general = {
       min_size     = 1
-      max_size     = 3
-      desired_size = 2
+      max_size     = 2
+      desired_size = 1
 
-      instance_types = ["m7i-flex.large"]
+      instance_types = ["t3.small"]
       capacity_type  = "ON_DEMAND"
 
       additional_security_group_ids = [aws_security_group.additional_node_sg.id]
