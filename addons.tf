@@ -1,52 +1,70 @@
-# ==========================================
-# 1. ARGOCD INSTALLATION
-# ==========================================
-resource "kubernetes_namespace" "argocd" {
-  metadata {
-    name = "argocd"
+# 1. Helm Provider Configuration
+provider "helm" {
+  kubernetes {
+    host                   = module.eks.cluster_endpoint
+    cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+
+    exec {
+      api_version = "client.authentication.k8s.io/v1beta1"
+      args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
+      command     = "aws"
+    }
   }
-  depends_on = [module.eks]
 }
 
-resource "helm_release" "argocd" {
-  name       = "argocd"
-  repository = "https://argoproj.github.io/argo-helm"
-  chart      = "argo-cd"
-  version    = "5.51.4"
-  namespace  = kubernetes_namespace.argocd.metadata[0].name
+# 2. Kubernetes Provider Configuration
+provider "kubernetes" {
+  host                   = module.eks.cluster_endpoint
+  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
 
-  set {
-    name  = "server.insecure"
-    value = "true" # ArgoCD ka apna SSL offload kar rahe hain kyunki Ingress handle karega TLS
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
+    command     = "aws"
   }
-  depends_on = [module.eks]
 }
 
-# ==========================================
-# 2. CERT-MANAGER (Self-Signed Certificate Engine)
-# ==========================================
-resource "kubernetes_namespace" "cert_manager" {
-  metadata {
-    name = "cert-manager"
-  }
-  depends_on = [module.eks]
-}
-
+# 3. Cert-Manager Deployment
 resource "helm_release" "cert_manager" {
-  name       = "cert-manager"
-  repository = "https://charts.jetstack.io"
-  chart      = "cert-manager"
-  version    = "v1.13.3"
-  namespace  = kubernetes_namespace.cert_manager.metadata[0].name
+  name             = "cert-manager"
+  repository       = "https://charts.jetstack.io"
+  chart            = "cert-manager"
+  version          = "v1.14.0"
+  namespace        = "cert-manager"
+  create_namespace = true
 
   set {
     name  = "installCRDs"
-    value = "true" # Kubernetes ko Cert-Manager ke resources samjhane ke liye LAZMI hai
+    value = "true"
   }
-  depends_on = [module.eks]
 }
 
-# Cluster-wide Certificate Issuer (Jo certificate sign karega)
+# 4. ArgoCD Deployment
+resource "helm_release" "argocd" {
+  name             = "argocd"
+  repository       = "https://argoproj.github.io/argo-charts"
+  chart            = "argo-cd"
+  version          = "5.52.0"
+  namespace        = "argocd"
+  create_namespace = true
+}
+
+# 5. Nginx Ingress Controller
+resource "helm_release" "nginx_ingress" {
+  name             = "ingress-nginx"
+  repository       = "https://kubernetes.github.io/ingress-nginx"
+  chart            = "ingress-nginx"
+  version          = "4.9.0"
+  namespace        = "ingress-nginx"
+  create_namespace = true
+}
+
+# ==============================================================================
+# ⚠️ KUBERNETES MANIFESTS (Temporary Commented Out for Bootstrapping)
+# Cluster poora banne ke baad, hum inko uncomment karke dobara push karenge.
+# ==============================================================================
+
+/*
 resource "kubernetes_manifest" "selfsigned_issuer" {
   manifest = {
     apiVersion = "cert-manager.io/v1"
@@ -58,37 +76,9 @@ resource "kubernetes_manifest" "selfsigned_issuer" {
       selfSigned = {}
     }
   }
-  depends_on = [module.eks, helm_release.cert_manager]
+  depends_on = [helm_release.cert_manager]
 }
 
-# ==========================================
-# 3. NGINX INGRESS CONTROLLER (AWS Load Balancer Creator)
-# ==========================================
-resource "kubernetes_namespace" "ingress_nginx" {
-  metadata {
-    name = "ingress-nginx"
-  }
-  depends_on = [module.eks]
-}
-
-resource "helm_release" "nginx_ingress" {
-  name       = "ingress-nginx"
-  repository = "https://kubernetes.github.io/ingress-nginx"
-  chart      = "ingress-nginx"
-  version    = "4.9.0"
-  namespace  = kubernetes_namespace.ingress_nginx.metadata[0].name
-
-  # AWS specific annotations jo peeche Network Load Balancer (NLB) banati hain
-  set {
-    name  = "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-type"
-    value = "nlb"
-  }
-  depends_on = [module.eks, module.vpc]
-}
-
-# ==========================================
-# 4. INGRESS RULE FOR ARGOCD (The Bridge)
-# ==========================================
 resource "kubernetes_manifest" "argocd_ingress" {
   manifest = {
     apiVersion = "networking.k8s.io/v1"
@@ -97,34 +87,42 @@ resource "kubernetes_manifest" "argocd_ingress" {
       name      = "argocd-server-ingress"
       namespace = "argocd"
       annotations = {
-        "kubernetes.io/ingress.class"                  = "nginx"
-        "cert-manager.io/cluster-issuer"               = "selfsigned-issuer" # Cert manager ko call karna
-        "nginx.ingress.kubernetes.io/ssl-redirect"     = "true"              # HTTP ko HTTPS par bhejna
-        "nginx.ingress.kubernetes.io/backend-protocol" = "HTTP"
+        "cert-manager.io/cluster-issuer"             = "selfsigned-issuer"
+        "nginx.ingress.kubernetes.io/ssl-redirect"   = "true"
+        "nginx.ingress.kubernetes.io/backend-protocol" = "HTTPS"
       }
     }
     spec = {
-      tls = [{
-        hosts      = ["*"] # Kisi bhi domain/URL par TLS activate kar do
-        secretName = "argocd-server-tls"
-      }]
-      rules = [{
-        http = {
-          paths = [{
-            path     = "/"
-            pathType = "Prefix"
-            backend = {
-              service = {
-                name = "argocd-server"
-                port = {
-                  name = "http"
+      ingressClassName = "nginx"
+      rules = [
+        {
+          host = "argocd.cloudaura.local"
+          http = {
+            paths = [
+              {
+                path     = "/"
+                pathType = "Prefix"
+                backend = {
+                  service = {
+                    name = "argocd-server"
+                    port = {
+                      name = "https"
+                    }
+                  }
                 }
               }
-            }
-          }]
+            ]
+          }
         }
-      }]
+      ]
+      tls = [
+        {
+          hosts      = ["argocd.cloudaura.local"]
+          secretName = "argocd-server-tls"
+        }
+      ]
     }
   }
   depends_on = [helm_release.argocd, helm_release.nginx_ingress, kubernetes_manifest.selfsigned_issuer]
 }
+*/
