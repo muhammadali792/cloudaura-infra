@@ -67,8 +67,8 @@ resource "kubernetes_manifest" "argocd_ingress" {
       name      = "argocd-server-ingress"
       namespace = "argocd"
       annotations = {
-        "cert-manager.io/cluster-issuer"             = "selfsigned-issuer"
-        "nginx.ingress.kubernetes.io/ssl-redirect"   = "true"
+        "cert-manager.io/cluster-issuer"               = "selfsigned-issuer"
+        "nginx.ingress.kubernetes.io/ssl-redirect"     = "true"
         "nginx.ingress.kubernetes.io/backend-protocol" = "HTTPS"
       }
     }
