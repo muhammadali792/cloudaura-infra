@@ -126,5 +126,5 @@ resource "kubernetes_manifest" "argocd_ingress" {
       }]
     }
   }
-  depends_on = [helm_release:argocd, helm_release:nginx_ingress, kubernetes_manifest:selfsigned_issuer]
+  depends_on = [helm_release:argocd, helm_release.nginx_ingress, kubernetes_manifest.selfsigned_issuer]
 }
