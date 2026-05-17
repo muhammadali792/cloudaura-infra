@@ -18,11 +18,10 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials
+      - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::351849325312:role/github-actions-oidc-execution-role
           aws-region: eu-north-1
 
       - name: Trigger 2-Minute Fast Delete
@@ -41,7 +40,7 @@ jobs:
             --filter "Name=tag:Environment,Values=staging" \
             --query "NatGateways[0].NatGatewayId" --output text)
 
-          if [ "$NAT_GW_ID" != "None" ] && [ -not -z "$NAT_GW_ID" ]; then
+          if [ "$NAT_GW_ID" != "None" ] && [ ! -z "$NAT_GW_ID" ]; then
             echo "Found NAT Gateway: $NAT_GW_ID. Deleting now..."
             aws ec2 delete-nat-gateway --nat-gateway-id $NAT_GW_ID || true
           else
@@ -49,4 +48,4 @@ jobs:
           fi
 
           echo "=== STEP 4: Success ==="
-          echo "AWS ko deletion ka order bhej diya gaya hai. Pipeline safely exit kar rahi hai!"
+          echo "AWS ko OIDC ke kroz deletion ka order bhej diya gaya hai. Pipeline safely exit kar rahi hai!"
