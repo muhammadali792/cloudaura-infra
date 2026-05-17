@@ -1,30 +1,4 @@
-# 1. Helm Provider Configuration
-provider "helm" {
-  kubernetes {
-    host                   = module.eks.cluster_endpoint
-    cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
-
-    exec {
-      api_version = "client.authentication.k8s.io/v1beta1"
-      args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
-      command     = "aws"
-    }
-  }
-}
-
-# 2. Kubernetes Provider Configuration
-provider "kubernetes" {
-  host                   = module.eks.cluster_endpoint
-  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
-
-  exec {
-    api_version = "client.authentication.k8s.io/v1beta1"
-    args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
-    command     = "aws"
-  }
-}
-
-# 3. Cert-Manager Deployment
+# 1. Cert-Manager Deployment
 resource "helm_release" "cert_manager" {
   name             = "cert-manager"
   repository       = "https://charts.jetstack.io"
@@ -39,7 +13,7 @@ resource "helm_release" "cert_manager" {
   }
 }
 
-# 4. ArgoCD Deployment
+# 2. ArgoCD Deployment
 resource "helm_release" "argocd" {
   name             = "argocd"
   repository       = "https://argoproj.github.io/argo-charts"
@@ -49,7 +23,7 @@ resource "helm_release" "argocd" {
   create_namespace = true
 }
 
-# 5. Nginx Ingress Controller
+# 3. Nginx Ingress Controller
 resource "helm_release" "nginx_ingress" {
   name             = "ingress-nginx"
   repository       = "https://kubernetes.github.io/ingress-nginx"
@@ -61,9 +35,7 @@ resource "helm_release" "nginx_ingress" {
 
 # ==============================================================================
 # ⚠️ KUBERNETES MANIFESTS (Temporary Commented Out for Bootstrapping)
-# Cluster poora banne ke baad, hum inko uncomment karke dobara push karenge.
 # ==============================================================================
-
 /*
 resource "kubernetes_manifest" "selfsigned_issuer" {
   manifest = {
