@@ -58,7 +58,7 @@ resource "kubernetes_manifest" "selfsigned_issuer" {
       selfSigned = {}
     }
   }
-  depends_on = [helm_release.cert_manager]
+  depends_on = [module.eks, helm_release.cert_manager]
 }
 
 # ==========================================
