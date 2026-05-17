@@ -61,3 +61,7 @@ jobs:
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: terraform apply -auto-approve -input=false
+      - name: Get Admin Secret Key
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          terraform output -raw admin_user_secret_key
