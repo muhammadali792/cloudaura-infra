@@ -21,6 +21,13 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # Industry Requirement: Kubernetes tools ko pipeline runner me install karna
+      - name: Setup Kubernetes Tools (kubectl & helm)
+        uses: azure/setup-kubernetes-tools@v3
+        with:
+          kubectl-version: 'v1.30.0'
+          helm-version: 'v3.14.0'
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -43,6 +50,11 @@ jobs:
 
       - name: Terraform Format Check
         run: terraform fmt -check
+
+      # Industry Best Practice: Kubeconfig ko generate karna taake Helm/Kubernetes providers authenticate ho sakein
+      - name: Configure Kubeconfig for Kubernetes/Helm Providers
+        run: |
+          aws eks update-kubeconfig --region ${{ vars.AWS_REGION }} --name cloudaura-eks-cluster || echo "Cluster doesn't exist yet, proceeding..."
 
       - name: Terraform Plan
         run: terraform plan -input=false
