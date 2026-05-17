@@ -13,17 +13,17 @@ resource "helm_release" "cert_manager" {
   }
 }
 
-# 2. ArgoCD Deployment
+# 2. ArgoCD Deployment (Fixed URL)
 resource "helm_release" "argocd" {
   name             = "argocd"
-  repository       = "https://argoproj.github.io/argo-charts"
+  repository       = "https://argoproj.github.io/argo-helm" # <--- Fixed URL yahan hai
   chart            = "argo-cd"
   version          = "5.52.0"
   namespace        = "argocd"
   create_namespace = true
 }
 
-# 3. Nginx Ingress Controller
+# 3. Nginx Ingress Controller (Fixed Timeout)
 resource "helm_release" "nginx_ingress" {
   name             = "ingress-nginx"
   repository       = "https://kubernetes.github.io/ingress-nginx"
@@ -31,6 +31,9 @@ resource "helm_release" "nginx_ingress" {
   version          = "4.9.0"
   namespace        = "ingress-nginx"
   create_namespace = true
+
+  # 🚀 AWS Load Balancer ke ghanton intezar se bachne ke liye:
+  wait = false
 }
 
 # ==============================================================================
