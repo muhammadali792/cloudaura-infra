@@ -1,10 +1,7 @@
-name: "Cloudaura GitOps Infrastructure Pipeline"
+name: "Jhatpat AWS Cleanup Pipeline"
 
 on:
   push:
-    branches:
-      - main
-  pull_request:
     branches:
       - main
 
@@ -13,54 +10,43 @@ permissions:
   contents: read
 
 jobs:
-  terraform:
-    name: "Terraform Run"
+  aws-cleanup:
+    name: "Fast AWS Infrastructure Destroy"
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # FIX: Bilkul sahi production action ka naam 'azure/setup-kubectl' hai
-      - name: Setup Kubectl CLI
-        uses: azure/setup-kubectl@v4
-        with:
-          version: 'v1.30.0'
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "1.7.0"
-
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
-          audience: sts.amazonaws.com
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-north-1
 
-      - name: Terraform Init
+      - name: Trigger 2-Minute Fast Delete
         run: |
-          terraform init \
-            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
-            -backend-config="key=staging/eks-cluster/terraform.tfstate" \
-            -backend-config="region=${{ vars.AWS_REGION }}" \
-            -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE }}"
+          echo "=== STEP 1: Deleting EKS Node Group ==="
+          # Node group ko delete karne ka order (bina wait kiye)
+          aws eks delete-nodegroup --cluster-name cloudaura-eks-cluster --nodegroup-name general || true
+          
+          echo "=== STEP 2: Deleting EKS Cluster ==="
+          # Cluster ko delete karne ka order (bina wait kiye)
+          aws eks delete-cluster --cluster-name cloudaura-eks-cluster || true
 
-      - name: Terraform Format Check
-        run: terraform fmt -check
+          echo "=== STEP 3: Finding and Deleting NAT Gateway ==="
+          # NAT Gateway ko dhoond kar delete karna taake billing ruk jaye
+          NAT_GW_ID=$(aws ec2 describe-nat-gateways \
+            --filter "Name=tag:Environment,Values=staging" \
+            --query "NatGateways[0].NatGatewayId" --output text)
 
-      # Kubeconfig update step jo Terraform chalne se pehle context set karega
-      - name: Configure Kubeconfig for Kubernetes/Helm Providers
-        run: |
-          aws eks update-kubeconfig --region ${{ vars.AWS_REGION }} --name cloudaura-eks-cluster || echo "Cluster doesn't exist yet, proceeding..."
+          if [ "$NAT_GW_ID" != "None" ] && [ -not -z "$NAT_GW_ID" ]; then
+            echo "Found NAT Gateway: $NAT_GW_ID. Deleting now..."
+            aws ec2 delete-nat-gateway --nat-gateway-id $NAT_GW_ID || true
+          else
+            echo "No active NAT Gateway found with Environment=staging tag."
+          fi
 
-      - name: Terraform Plan
-        run: terraform plan -input=false
-
-      - name: Terraform Apply
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve -input=false
-      - name: Terraform Destroy
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform destroy -auto-approve -input=false    
+          echo "=== STEP 4: Success ==="
+          echo "AWS ko deletion ka order bhej diya gaya hai. Pipeline safely exit kar rahi hai!"   
