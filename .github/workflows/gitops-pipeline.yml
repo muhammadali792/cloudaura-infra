@@ -22,7 +22,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: eu-north-1
 
       - name: Trigger 2-Minute Fast Delete
@@ -49,4 +49,4 @@ jobs:
           fi
 
           echo "=== STEP 4: Success ==="
-          echo "AWS ko deletion ka order bhej diya gaya hai. Pipeline safely exit kar rahi hai!"   
+          echo "AWS ko deletion ka order bhej diya gaya hai. Pipeline safely exit kar rahi hai!"
