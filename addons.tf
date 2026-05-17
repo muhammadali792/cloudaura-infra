@@ -21,6 +21,7 @@ resource "helm_release" "argocd" {
   version          = "5.52.0"
   namespace        = "argocd"
   create_namespace = true
+  wait             = false
 }
 
 # 3. Nginx Ingress Controller (Fixed Timeout)
