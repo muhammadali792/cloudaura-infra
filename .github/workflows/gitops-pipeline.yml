@@ -32,7 +32,6 @@ jobs:
       - name: Terraform Format Check
         run: terraform fmt -check
 
-      # === YAHAN HAMNE ENVIRONMENT VARIABLES USE KIYE HAIN ===
       - name: Terraform Init
         run: terraform init -reconfigure
         env:
@@ -45,21 +44,8 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
 
-      # STEP 1: Security Groups & IAM Configurations
-      - name: Terraform Apply (Step 1 - Security Groups & IAM Users)
+      # Single comprehensive apply - let Terraform handle dependencies
+      - name: Terraform Apply (Complete Infrastructure)
         run: |
-          echo "Deploying Security Groups and IAM configurations..."
-          terraform apply -target=aws_security_group.eks_cluster_sg -target=aws_security_group.eks_nodes_sg -target=aws_iam_role.eks_master_role -target=aws_iam_role.eks_node_role -auto-approve
-          terraform apply -target=aws_iam_user.allowed_users -auto-approve || true
-
-      # STEP 2: Core EKS Cluster & Node Groups
-      - name: Terraform Apply (Step 2 - Core EKS Cluster)
-        run: |
-          echo "Deploying Core EKS Cluster and Node Groups..."
-          terraform apply -target=aws_eks_cluster.staging_cluster -target=aws_eks_node_group.general -auto-approve || true
-
-      # STEP 3: Addons & Catch-all
-      - name: Terraform Apply (Step 3 - EKS Addons & Final Sync)
-        run: |
-          echo "Deploying EKS Add-ons and verifying remaining infrastructure..."
+          echo "Deploying complete infrastructure..."
           terraform apply -auto-approve
