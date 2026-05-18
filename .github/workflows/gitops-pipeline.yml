@@ -39,20 +39,7 @@ jobs:
 
       - name: Terraform Validate
         run: terraform validate
-
-      - name: Delete Conflicting Resources
-        run: |
-          # IAM User delete
-          aws iam list-access-keys --user-name cluster-admin-user --query 'AccessKeyMetadata[*].AccessKeyId' --output text | xargs -I {} aws iam delete-access-key --user-name cluster-admin-user --access-key-id {} || true
-          aws iam delete-login-profile --user-name cluster-admin-user || true
-          aws iam delete-user --user-name cluster-admin-user || true
-
-          # KMS Alias delete
-          aws kms delete-alias --alias-name alias/eks/cloudaura-eks-cluster || true
-
-          # CloudWatch Log Group delete
-          aws logs delete-log-group --log-group-name /aws/eks/cloudaura-eks-cluster/cluster || true
-
+        
       - name: Terraform Apply
         run: |
           echo "Deploying complete infrastructure..."
