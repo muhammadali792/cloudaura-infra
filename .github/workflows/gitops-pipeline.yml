@@ -39,12 +39,7 @@ jobs:
 
       - name: Terraform Validate
         run: terraform validate
-        
-      - name: Terraform Apply
-        run: |
-          echo "Deploying complete infrastructure..."
-          terraform apply -auto-approve 2>&1 | tee apply.log
-          exit ${PIPESTATUS[0]}
+    
       - name: Terraform Destroy
         run: |
           echo "Destroying complete infrastructure..."
