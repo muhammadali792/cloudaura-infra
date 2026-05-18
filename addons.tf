@@ -45,6 +45,7 @@ resource "helm_release" "nginx_ingress" {
 # ⚠️ KUBERNETES MANIFESTS (Temporary Commented Out for Bootstrapping)
 # Cluster poora banne ke baad, hum inko uncomment karke dobara push karenge.
 # ==============================================================================
+/*
 resource "kubernetes_manifest" "selfsigned_issuer" {
   manifest = {
     apiVersion = "cert-manager.io/v1"
@@ -105,3 +106,4 @@ resource "kubernetes_manifest" "argocd_ingress" {
   }
   depends_on = [helm_release.argocd, helm_release.nginx_ingress, kubernetes_manifest.selfsigned_issuer]
 }
+*/
