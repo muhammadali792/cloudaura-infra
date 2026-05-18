@@ -49,7 +49,7 @@ jobs:
       - name: Terraform Apply (Step 1 - Security Groups & IAM Users)
         run: |
           echo "Deploying Security Groups and IAM configurations..."
-          terraform apply -target=aws_security_group.eks_cluster_sg -target=aws_security_group.eks_nodes_sg -target=aws_iam_role.eks_master_role -target=aws_iam_role.eks_node_role -auto-approve || true
+          terraform apply -target=aws_security_group.eks_cluster_sg -target=aws_security_group.eks_nodes_sg -target=aws_iam_role.eks_master_role -target=aws_iam_role.eks_node_role -auto-approve
           terraform apply -target=aws_iam_user.allowed_users -auto-approve || true
 
       # STEP 2: Core EKS Cluster & Node Groups
