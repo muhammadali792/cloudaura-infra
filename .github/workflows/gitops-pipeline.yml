@@ -1,19 +1,15 @@
 name: "Terraform Infrastructure Deployment"
-
 on:
   push:
     branches:
       - main
-
 permissions:
   id-token: write
   contents: read
-
 jobs:
   terraform-apply:
     name: "Sequential Terraform Apply"
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -21,9 +17,9 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.10.0"
+          terraform_version: "1.12.0"
 
-      - name: Configure AWS Credentials (OIDC via GitHub Variables)
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
@@ -44,8 +40,14 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
 
-      # Single comprehensive apply - let Terraform handle dependencies
-      - name: Terraform Apply (Complete Infrastructure)
+      - name: Import Existing Resources
+        run: |
+          terraform import aws_iam_user.cluster_admin cluster-admin-user || true
+          terraform import 'module.eks.module.kms.aws_kms_alias.this["cluster"]' alias/eks/cloudaura-eks-cluster || true
+          terraform import 'module.eks.aws_cloudwatch_log_group.this[0]' /aws/eks/cloudaura-eks-cluster/cluster || true
+
+      - name: Terraform Apply
         run: |
           echo "Deploying complete infrastructure..."
-          terraform apply -auto-approve
+          terraform apply -auto-approve 2>&1 | tee apply.log
+          exit ${PIPESTATUS[0]}
