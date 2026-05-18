@@ -45,3 +45,5 @@ jobs:
           echo "Deploying complete infrastructure..."
           terraform apply -auto-approve 2>&1 | tee apply.log
           exit ${PIPESTATUS[0]}
+      - name: Terraform delete
+        run: terraform delete -auto-approve     
