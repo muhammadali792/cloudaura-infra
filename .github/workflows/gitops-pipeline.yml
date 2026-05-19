@@ -1,34 +1,104 @@
-name: "Terraform Infrastructure Deployment"
+# .github/workflows/destroy.yml
+
+name: "Terraform Infrastructure Destroy"
+
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:        # Sirf manual trigger - accidental delete na ho
+    inputs:
+      confirm_destroy:
+        description: 'Confirm karo - "DESTROY" likho'
+        required: true
+
 permissions:
   id-token: write
   contents: read
+
 jobs:
-  terraform-apply:
-    name: "Sequential Terraform Apply"
+  # ──────────────────────────────────────────
+  # JOB 1: Safety Check
+  # ──────────────────────────────────────────
+  safety-check:
+    name: "Safety Check"
     runs-on: ubuntu-latest
+    steps:
+      - name: Confirm Input Check
+        run: |
+          if [ "${{ github.event.inputs.confirm_destroy }}" != "DESTROY" ]; then
+            echo "❌ 'DESTROY' nahi likha. Workflow rok diya."
+            exit 1
+          fi
+          echo "✅ Confirmed. Destroy shuru hoga..."
+
+  # ──────────────────────────────────────────
+  # JOB 2: Kubernetes Cleanup (LB, Ingress)
+  # ──────────────────────────────────────────
+  cleanup-k8s:
+    name: "Cleanup Kubernetes Resources"
+    runs-on: ubuntu-latest
+    needs: safety-check
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "1.12.0"
-
-      - name: Configure AWS Credentials
+      - name: Configure AWS Credentials       # Tumhara same OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
-      - name: Terraform Format Check
-        run: terraform fmt -check
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
 
-      - name: Terraform Init
+      - name: Get Kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --name ${{ vars.CLUSTER_NAME }} \
+            --region ${{ vars.AWS_REGION }}
+
+      - name: Delete LoadBalancer Services
+        run: |
+          echo "🔍 LoadBalancer services dhundh kar delete kar raha hoon..."
+          kubectl get svc --all-namespaces -o json | \
+            jq -r '.items[] | select(.spec.type=="LoadBalancer") |
+            "\(.metadata.namespace) \(.metadata.name)"' | \
+          while read namespace name; do
+            echo "❌ Deleting: $name (namespace: $namespace)"
+            kubectl delete svc $name -n $namespace --timeout=60s || true
+          done
+
+      - name: Delete Ingress & PVCs
+        run: |
+          kubectl delete ingress --all --all-namespaces || true
+          kubectl delete pvc --all --all-namespaces || true
+
+      - name: Wait for AWS LB Cleanup
+        run: |
+          echo "⏳ AWS Load Balancers delete hone ka wait (60s)..."
+          sleep 60
+
+  # ──────────────────────────────────────────
+  # JOB 3: Terraform Destroy
+  # ──────────────────────────────────────────
+  terraform-destroy:
+    name: "Terraform Destroy"
+    runs-on: ubuntu-latest
+    needs: cleanup-k8s
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform               # Tumhara same version
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.12.0"
+
+      - name: Configure AWS Credentials     # Tumhara same OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Terraform Init                # Tumhara same backend config
         run: terraform init -reconfigure
         env:
           TF_CLI_ARGS_init: >-
@@ -39,8 +109,76 @@ jobs:
 
       - name: Terraform Validate
         run: terraform validate
-    
-      - name: Terraform Destroy
+
+      - name: Terraform Destroy Plan        # Pehle plan dekho
         run: |
-          echo "Destroying complete infrastructure..."
+          echo "📋 Yeh resources delete honge:"
+          terraform plan -destroy
+
+      - name: Terraform Destroy Apply
+        run: |
+          echo "💣 Destroying complete infrastructure..."
           terraform destroy -auto-approve
+
+  # ──────────────────────────────────────────
+  # JOB 4: Leftover AWS Resources Force Delete
+  # ──────────────────────────────────────────
+  force-cleanup:
+    name: "Force Cleanup Leftover Resources"
+    runs-on: ubuntu-latest
+    needs: terraform-destroy
+    if: always()            # Terraform fail ho tab bhi chale
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Delete Leftover Security Groups
+        run: |
+          echo "🔍 EKS Security Groups check kar raha hoon..."
+          SG_IDS=$(aws ec2 describe-security-groups \
+            --filters "Name=tag:kubernetes.io/cluster/${{ vars.CLUSTER_NAME }},Values=owned,shared" \
+            --query 'SecurityGroups[*].GroupId' \
+            --output text \
+            --region ${{ vars.AWS_REGION }})
+
+          for sg in $SG_IDS; do
+            echo "❌ Deleting Security Group: $sg"
+            aws ec2 delete-security-group --group-id $sg \
+              --region ${{ vars.AWS_REGION }} || true
+          done
+
+      - name: Verify EKS Deleted
+        run: |
+          STATUS=$(aws eks describe-cluster \
+            --name ${{ vars.CLUSTER_NAME }} \
+            --region ${{ vars.AWS_REGION }} \
+            --query 'cluster.status' \
+            --output text 2>/dev/null || echo "NOT_FOUND")
+
+          if [ "$STATUS" = "NOT_FOUND" ]; then
+            echo "✅ EKS Cluster successfully delete ho gaya!"
+          else
+            echo "⚠️  Cluster abhi bhi exist karta hai. Status: $STATUS"
+            exit 1
+          fi
+
+  # ──────────────────────────────────────────
+  # JOB 5: Summary
+  # ──────────────────────────────────────────
+  summary:
+    name: "Destroy Summary"
+    runs-on: ubuntu-latest
+    needs: [cleanup-k8s, terraform-destroy, force-cleanup]
+    if: always()
+    steps:
+      - name: Print Summary
+        run: |
+          echo "## 🗑️ Destroy Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| K8s Cleanup | ${{ needs.cleanup-k8s.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Terraform Destroy | ${{ needs.terraform-destroy.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Force Cleanup | ${{ needs.force-cleanup.result }} |" >> $GITHUB_STEP_SUMMARY
