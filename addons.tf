@@ -7,7 +7,9 @@ module "eks_addons" {
   cluster_version   = module.eks.cluster_version
   oidc_provider_arn = module.eks.oidc_provider_arn
 
+  # =============================================================================
   # NGINX INGRESS + NLB
+  # =============================================================================
   enable_ingress_nginx = true
   ingress_nginx = {
     values = [
@@ -62,13 +64,57 @@ module "eks_addons" {
     ]
   }
 
+  # =============================================================================
   # ARGOCD
+  # =============================================================================
   enable_argocd = true
   argocd = {
     namespace = "argocd"
+    values = [
+      yamlencode({
+        server = {
+          ingress = {
+            enabled          = true
+            ingressClassName = "nginx"
+            annotations = {
+              "nginx.ingress.kubernetes.io/force-ssl-redirect" = "true"
+              "nginx.ingress.kubernetes.io/backend-protocol"   = "HTTPS"
+            }
+            hosts = ["argocd.${var.domain_name}"]
+          }
+          metrics = {
+            enabled = true
+            serviceMonitor = {
+              enabled   = true
+              namespace = "monitoring"
+            }
+          }
+        }
+        controller = {
+          metrics = {
+            enabled = true
+            serviceMonitor = {
+              enabled   = true
+              namespace = "monitoring"
+            }
+          }
+        }
+        repoServer = {
+          metrics = {
+            enabled = true
+            serviceMonitor = {
+              enabled   = true
+              namespace = "monitoring"
+            }
+          }
+        }
+      })
+    ]
   }
 
+  # =============================================================================
   # CLUSTER AUTOSCALER
+  # =============================================================================
   enable_cluster_autoscaler = true
   cluster_autoscaler = {
     set = [
@@ -87,13 +133,19 @@ module "eks_addons" {
     ]
   }
 
+  # =============================================================================
   # METRICS SERVER
+  # =============================================================================
   enable_metrics_server = true
 
+  # =============================================================================
   # EXTERNAL SECRETS
+  # =============================================================================
   enable_external_secrets = true
 
+  # =============================================================================
   # EXTERNAL DNS
+  # =============================================================================
   enable_external_dns = true
   external_dns = {
     set = [
@@ -108,10 +160,45 @@ module "eks_addons" {
     ]
   }
 
+  # =============================================================================
+  # PROMETHEUS + GRAFANA
+  # =============================================================================
+  enable_kube_prometheus_stack = true
+  kube_prometheus_stack = {
+    values = [
+      yamlencode({
+        grafana = {
+          ingress = {
+            enabled          = true
+            ingressClassName = "nginx"
+            annotations = {
+              "nginx.ingress.kubernetes.io/force-ssl-redirect" = "true"
+            }
+            hosts = ["grafana.${var.domain_name}"]
+          }
+        }
+        prometheus = {
+          ingress = {
+            enabled          = true
+            ingressClassName = "nginx"
+            annotations = {
+              "nginx.ingress.kubernetes.io/force-ssl-redirect" = "true"
+            }
+            hosts = ["prometheus.${var.domain_name}"]
+          }
+        }
+      })
+    ]
+  }
+
+  # =============================================================================
   # EFS CSI DRIVER
+  # =============================================================================
   enable_aws_efs_csi_driver = true
 
+  # =============================================================================
   # SECRETS STORE CSI DRIVER
+  # =============================================================================
   enable_secrets_store_csi_driver              = true
   enable_secrets_store_csi_driver_provider_aws = true
   secrets_store_csi_driver = {
