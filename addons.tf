@@ -15,14 +15,46 @@ module "eks_addons" {
     values = [
       yamlencode({
         controller = {
+          replicaCount = 3
+
+          topologySpreadConstraints = [
+            {
+              maxSkew           = 1
+              topologyKey       = "topology.kubernetes.io/zone"
+              whenUnsatisfiable = "DoNotSchedule"
+              labelSelector = {
+                matchLabels = {
+                  "app.kubernetes.io/name" = "ingress-nginx"
+                }
+              }
+            }
+          ]
+
+          resources = {
+            requests = {
+              cpu    = "100m"
+              memory = "128Mi"
+            }
+            limits = {
+              cpu    = "200m"
+              memory = "256Mi"
+            }
+          }
+
           service = {
-            type = "LoadBalancer"
+            type                  = "LoadBalancer"
+            externalTrafficPolicy = "Local"
             annotations = {
               "service.beta.kubernetes.io/aws-load-balancer-type"                              = "nlb"
               "service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled" = "true"
               "service.beta.kubernetes.io/aws-load-balancer-scheme"                            = "internet-facing"
+              "service.beta.kubernetes.io/aws-load-balancer-nlb-target-type"                   = "instance"
+              "service.beta.kubernetes.io/aws-load-balancer-health-check-path"                 = "/healthz"
+              "service.beta.kubernetes.io/aws-load-balancer-health-check-port"                 = "10254"
+              "service.beta.kubernetes.io/aws-load-balancer-health-check-protocol"             = "HTTP"
             }
           }
+
           config = {
             use-forwarded-headers      = "true"
             compute-full-forwarded-for = "true"
@@ -58,7 +90,6 @@ module "eks_addons" {
         name  = "extraArgs.balance-similar-node-groups"
         value = "true"
       }
-
     ]
   }
 
