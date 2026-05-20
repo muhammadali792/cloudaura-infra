@@ -7,9 +7,7 @@ module "eks_addons" {
   cluster_version   = module.eks.cluster_version
   oidc_provider_arn = module.eks.oidc_provider_arn
 
-  # =============================================================================
   # NGINX INGRESS + NLB
-  # =============================================================================
   enable_ingress_nginx = true
   ingress_nginx = {
     values = [
@@ -64,17 +62,13 @@ module "eks_addons" {
     ]
   }
 
-  # =============================================================================
   # ARGOCD
-  # =============================================================================
   enable_argocd = true
   argocd = {
     namespace = "argocd"
   }
 
-  # =============================================================================
   # CLUSTER AUTOSCALER
-  # =============================================================================
   enable_cluster_autoscaler = true
   cluster_autoscaler = {
     set = [
@@ -93,19 +87,13 @@ module "eks_addons" {
     ]
   }
 
-  # =============================================================================
   # METRICS SERVER
-  # =============================================================================
   enable_metrics_server = true
 
-  # =============================================================================
   # EXTERNAL SECRETS
-  # =============================================================================
   enable_external_secrets = true
 
-  # =============================================================================
   # EXTERNAL DNS
-  # =============================================================================
   enable_external_dns = true
   external_dns = {
     set = [
@@ -120,12 +108,25 @@ module "eks_addons" {
     ]
   }
 
-  # =============================================================================
   # EFS CSI DRIVER
-  # =============================================================================
   enable_aws_efs_csi_driver = true
 
-  depends_on = [module.eks]
+  # SECRETS STORE CSI DRIVER
+  enable_secrets_store_csi_driver              = true
+  enable_secrets_store_csi_driver_provider_aws = true
+  secrets_store_csi_driver = {
+    set = [
+      {
+        name  = "syncSecret.enabled"
+        value = "true"
+      },
+      {
+        name  = "enableSecretRotation"
+        value = "true"
+      }
+    ]
+  }
 
-  tags = local.common_tags
+  depends_on = [module.eks]
+  tags       = local.common_tags
 }
